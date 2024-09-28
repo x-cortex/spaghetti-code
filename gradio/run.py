@@ -6,15 +6,15 @@ from datetime import datetime
 
 
 # Function to handle chat and store data
-def chat_interface(user_input):
+def chat_interface(user_input, recipient="default_recipient", chat_history=""):
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Use the current time
 
     # Get the response from the model based on the user input
     response_data = get_response(
         chat_message=user_input,
-        recipient="default_recipient",
-        chat_history="",
+        recipient=recipient,
+        chat_history=chat_history,
         timestamp=timestamp,
     )
 
