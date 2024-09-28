@@ -1,13 +1,27 @@
 import gradio as gr
 from rag import get_response
+import os
+import json
+from datetime import datetime
 
 
+# Function to handle chat and store data
 def chat_interface(user_input):
-    response = get_response(user_input)
-    return response
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Use the current time
+
+    # Get the response from the model based on the user input
+    response_data = get_response(
+        chat_message=user_input,
+        recipient="default_recipient",
+        chat_history="",
+        timestamp=timestamp,
+    )
+
+    return response_data
 
 
-# Define Gradio Interface
+# Define Gradio Interface with only user_input as the input
 iface = gr.Interface(
     fn=chat_interface,
     inputs=gr.Textbox(

@@ -14,6 +14,27 @@ from typing_extensions import TypedDict
 from typing import List, Annotated
 import operator
 
+from supabase import create_client, Client
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Initialize Supabase client
+url = os.getenv("SUPABASE_URL")
+key = os.getenv("SUPABASE_KEY")
+supabase: Client = create_client(url, key)
+
+
+# Create a table if it doesn't exist
+def initialize_database():
+    # Supabase does not require explicit table creation in the same way as SQLite
+    print("Supabase client initialized")
+
+
+initialize_database()
+
+
 # Initialize LLMs
 local_llm = "llama3.2"
 llm = ChatOllama(model=local_llm, temperature=0)
@@ -67,6 +88,7 @@ retriever = vecstore.as_retriever(k=3)
 # Define Graph State
 class GraphState(TypedDict):
     chat_message: str  # User question
+    route: str  # Route to use for answer generation
     documents: List[str]  # List of retrieved documents from vector store or web search
     generation: str  # LLM generation
     web_search: str  # Binary decision to run web search
@@ -118,10 +140,14 @@ def route_question(state):
     )
     source = json.loads(route_question.content)["datasource"]
     if source == "quick-response":
-        return "quick-response"
+        return {"route": "quick-response"}
     elif source == "vectorstore":
         print("Routing question to vector store")
-        return "vectorstore"
+        return {"route": "vectorstore"}
+
+
+def route_question_holder(state):
+    return state["route"]
 
 
 def retrieve(state):
@@ -129,7 +155,7 @@ def retrieve(state):
     print("Retrieving documents from vector store")
     chat_message = state["chat_message"]
     documents = retriever.invoke(chat_message)
-    return {"documents": documents}
+    return {"documents": documents, "route": state["route"]}
 
 
 def generate(state):
@@ -143,7 +169,11 @@ def generate(state):
         context=docs_txt, chat_message=chat_message
     )
     generation = llm.invoke([HumanMessage(content=rag_prompt_formatted)])
-    return {"generation": generation, "loop_step": loop_step + 1}
+    return {
+        "generation": generation,
+        "loop_step": loop_step + 1,
+        "route": state["route"],
+    }
 
 
 def quick_response(state):
@@ -153,7 +183,11 @@ def quick_response(state):
 
     quick_response_formatted = quick_response_prompt.format(chat_message=chat_message)
     generation = llm.invoke([HumanMessage(content=quick_response_formatted)])
-    return {"generation": generation, "loop_step": loop_step + 1}
+    return {
+        "generation": generation,
+        "loop_step": loop_step + 1,
+        "route": state["route"],
+    }
 
 
 # Define and compile the graph
@@ -162,12 +196,15 @@ def create_graph():
 
     # Define the nodes
     workflow.add_node("quick-response", quick_response)
+    workflow.add_node("route_question", route_question)
     workflow.add_node("retrieve", retrieve)
     workflow.add_node("generate", generate)
 
     # Build graph
-    workflow.set_conditional_entry_point(
-        route_question,
+    workflow.set_entry_point("route_question")
+    workflow.add_conditional_edges(
+        "route_question",
+        route_question_holder,
         {
             "quick-response": "quick-response",
             "vectorstore": "retrieve",
@@ -180,7 +217,7 @@ def create_graph():
 
 
 # Function to get response from the graph
-def get_response(chat_message: str):
+def get_response(chat_message: str, recipient: str, chat_history: str, timestamp: str):
     g = create_graph()
     inputs = {"chat_message": chat_message}
     events = []
@@ -189,8 +226,25 @@ def get_response(chat_message: str):
         events.append(event)
 
     if events:
-        # Get the last generation
+
         last_event = events[-1]
+        print(last_event)
         generation = last_event.get("generation", "No response generated.")
+        print("Connecting to Supabase")
+        data = {
+            "recipient": recipient,
+            "last_chat": chat_message,
+            "chat_history": chat_history,
+            "timestamp": timestamp,
+            "route": events[-1]["route"],
+            "response": (
+                generation.content if hasattr(generation, "content") else generation
+            ),
+        }
+        supabase.table("chat_data").insert(data).execute()
         return generation.content if hasattr(generation, "content") else generation
     return "No response generated."
+
+
+if __name__ == "__main__":
+    print(get_response("What is the capital of India?"))
