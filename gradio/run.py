@@ -6,7 +6,7 @@ from datetime import datetime
 
 
 # Function to handle chat and store data
-def chat_interface(user_input, recipient, chat_history):
+def chat_interface(user_input, recipient, chat_history, timestamp):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Use the current time
 
     # Get the response from the model based on the user input
@@ -35,6 +35,7 @@ iface = gr.Interface(
         gr.Textbox(
             lines=5, placeholder="Chat history (optional)", label="Chat History"
         ),
+        gr.Textbox(lines=5, placeholder="Timestamp", label="Timestamp"),
     ],
     outputs=gr.Textbox(label="AI Response"),
     title="LangChain & LangGraph Chatbot",

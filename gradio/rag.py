@@ -36,7 +36,7 @@ initialize_database()
 
 
 # Initialize LLMs
-local_llm = "llama3.2"
+local_llm = "llama3.2:3b"
 llm = ChatOllama(model=local_llm, temperature=0)
 llm_json_mode = ChatOllama(model=local_llm, temperature=0, format="json")
 
@@ -244,7 +244,3 @@ def get_response(chat_message: str, recipient: str, chat_history: str, timestamp
         supabase.table("chat_data").insert(data).execute()
         return generation.content if hasattr(generation, "content") else generation
     return "No response generated."
-
-
-if __name__ == "__main__":
-    print(get_response("What is the capital of India?"))
